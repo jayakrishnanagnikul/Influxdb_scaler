@@ -4,10 +4,49 @@ import matplotlib.pyplot as plt
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
+global time_values
+global sine_values
+time_values=[]
+sine_values=[]
+
+def sine_with_time():
+    global time_values
+    global sine_values
+
+
+# Initialize a list to store the sine wave data
+    sine_wave_data = []
+
+    # Get the start time
+    start_time = time.time()
+
+    # Run the loop for the specified duration
+    while time.time() - start_time < duration:
+        # Get the current time
+        current_time = time.time()
+
+        # Calculate the sine wave value
+        sine_value = amplitude * np.sin(2 * np.pi * frequency * current_time + phase)
+
+        # Store the time and sine value in the list
+        sine_wave_data.append((current_time, sine_value))
+
+        # Sleep for the appropriate amount of time to maintain the sampling rate
+        time.sleep(1.0 / sampling_rate)
+
+    # Convert the data to a numpy array for further processing or analysis
+    sine_wave_data = np.array(sine_wave_data)
+
+    # Print the generated data
+    # print(sine_wave_data)
+    
+    time_values = sine_wave_data[:, 0]
+    sine_values = sine_wave_data[:, 1]
+
 # Parameters
-bucket = "DB-test"
+bucket = "test_bucket"
 org = "Agnikul"
-token = "t5LCW4sEaXgaNjqAwMAgaNyUImD0yeInR1sscmUbPGfb5d_F4r5kvRk1lNu7pkNzxA7kldwyB59PFFlPVafvHw=="
+token = "sOUQsISLh_NrZMiDLYOrd9tnhgD-GRppfuQus1WQfbsW_FOMVUIm_c-2o428MOySuUyLZixLkSwl6jWUA_9b_Q=="
 url = "http://localhost:8086"
 
 # Create an InfluxDB client
@@ -22,45 +61,36 @@ phase = 0          # Phase in radians
 sampling_rate = 1000  # Sampling rate in samples per second
 duration = 2       # Duration in seconds
 
-# Generate time values
-t = np.linspace(0, duration, int(sampling_rate * duration), endpoint=False)
+sine_with_time()
 
-# Generate sine wave values
-sine_wave = amplitude * np.sin(2 * np.pi * frequency * t + phase)
-
-# Generate sine wave data
-
-# t = np.arange(0, duration, sampling_interval)
-# sine_wave = np.sin(2 * np.pi * frequency * t)
-
-print("sine dta generated with size ",len(t))
+print("sine data generated with size ",len(time_values))
 
 # Write data to InfluxDB
-for i in range(len(t)):
-    point = Point("sine_wave").tag("device", "sensor1").field("value", sine_wave[i]).time(time.time_ns(), WritePrecision.NS)
+for i in range(len(time_values)):
+    point = Point("sine_wave").tag("device", "sensor1").field("value", sine_values[i]).time(time.time_ns(), WritePrecision.NS)
     write_api.write(bucket=bucket, org=org, record=point)
+    print(".\r",end=" \r")
     time.sleep(0.1)
 
 print("data written in DB")
 # Query data from InfluxDB
-query = f'from(bucket: "{bucket}") |> range(start: -{duration + 1}s) |> filter(fn: (r) => r._measurement == "sine_wave")'
+query = f'from(bucket: "{bucket}") |> range(start: -{len(time_values) + 1}s) |> filter(fn: (r) => r._measurement == "sine_wave")'
 result = query_api.query(org=org, query=query)
 # Extract data
-times = []
-values = []
+db_times = []
+db_values = []
 for table in result:
     for record in table.records:
-        times.append(record.get_time())
-        values.append(record.get_value())
+        db_times.append(record.get_time())
+        db_values.append(record.get_value())
 
 # Plot data
 plt.figure(figsize=(10, 6))
-plt.plot(t, sine_wave)
+plt.plot(time_values, sine_values,color="red",label="generated_sinewave")
+plt.legend(loc='upper left')
+plt.twiny()
+plt.plot(db_times, db_values,color="blue",label="retrived_data_sinewave")
 plt.title('INPUT Sine Wave')
-plt.show()
-plt.plot(times, values)
-plt.title('Sine Wave')
-plt.xlabel('Time')
-plt.ylabel('Amplitude')
+plt.legend(loc='upper right')
 plt.grid(True)
 plt.show()
